@@ -7,13 +7,33 @@
 import type {
   TmdbTitle,
   TmdbCastMember,
+  TmdbWatchProvider,
+  TmdbWatchProviders,
   MediaType,
+  StreamerId,
 } from '../../types';
 
 export interface TitleDetail extends TmdbTitle {
   cast: TmdbCastMember[];
   similarIds: number[];
 }
+
+/**
+ * TMDB watch-provider IDs we recognize. Anything not in this map is
+ * dropped from results — the prototype only ships with these 7 services.
+ * Add to this map (and the data file) before adding new streamers.
+ */
+const TMDB_PROVIDER_TO_STREAMER: Record<number, StreamerId> = {
+  8: 'netflix',
+  9: 'prime',
+  350: 'appletv',
+  // Max has multiple historical IDs as it rebranded.
+  384: 'max',  // HBO Max (legacy)
+  1899: 'max', // Max
+  15: 'hulu',
+  337: 'disney',
+  386: 'peacock',
+};
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
@@ -72,6 +92,28 @@ export class TmdbClient {
     return toTitleDetail(data, mediaType);
   }
 
+  /**
+   * Where-to-watch providers for a title in a given region.
+   * Returns updatedAt = fetch time so the UI can show "Updated 2h ago"
+   * (per PRD §11 freshness mitigation).
+   *
+   * region defaults to 'US' for v0.5 alpha; region picker is post-alpha.
+   */
+  async watchProviders(
+    id: number,
+    mediaType: MediaType,
+    region: string = 'US'
+  ): Promise<TmdbWatchProviders> {
+    const data = await this.get<TmdbRawWatchProviders>(
+      `/${mediaType}/${id}/watch/providers`
+    );
+    const regionData = data.results?.[region];
+    return {
+      providers: regionData ? mapWatchProviders(regionData) : [],
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   // ── internals ───────────────────────────────────────────────────────────
 
   private async get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
@@ -105,6 +147,44 @@ interface TmdbRawListItem {
   backdrop_path: string | null;
   overview: string;
   genre_ids?: number[];
+}
+
+interface TmdbRawWatchProviders {
+  results?: Record<string, TmdbRawRegion>;
+}
+
+interface TmdbRawRegion {
+  flatrate?: TmdbRawProvider[];
+  rent?: TmdbRawProvider[];
+  buy?: TmdbRawProvider[];
+  free?: TmdbRawProvider[];
+}
+
+interface TmdbRawProvider {
+  provider_id: number;
+  provider_name: string;
+}
+
+function mapWatchProviders(region: TmdbRawRegion): TmdbWatchProvider[] {
+  const out: TmdbWatchProvider[] = [];
+  const seen = new Set<StreamerId>();
+  const consume = (
+    arr: TmdbRawProvider[] | undefined,
+    type: TmdbWatchProvider['type'],
+  ) => {
+    for (const p of arr ?? []) {
+      const id = TMDB_PROVIDER_TO_STREAMER[p.provider_id];
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name: p.provider_name, type });
+    }
+  };
+  // Subscription providers first — they're the user's "owned" set.
+  consume(region.flatrate, 'flatrate');
+  consume(region.rent, 'rent');
+  consume(region.buy, 'buy');
+  consume(region.free, 'free');
+  return out;
 }
 
 interface TmdbRawDetail {

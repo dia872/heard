@@ -145,6 +145,56 @@ describe('TmdbClient', () => {
     });
   });
 
+  describe('watchProviders', () => {
+    it('maps TMDB provider IDs to internal StreamerIds, dedupes by streamer', async () => {
+      const fetch = mockFetch({
+        results: {
+          US: {
+            flatrate: [
+              { provider_id: 8, provider_name: 'Netflix' },
+              { provider_id: 9, provider_name: 'Amazon Prime Video' },
+              { provider_id: 350, provider_name: 'Apple TV Plus' },
+            ],
+            rent: [
+              { provider_id: 9, provider_name: 'Amazon Prime Video' }, // dup
+              { provider_id: 99999, provider_name: 'Unknown' },        // dropped
+            ],
+          },
+          GB: {
+            flatrate: [{ provider_id: 8, provider_name: 'Netflix UK' }],
+          },
+        },
+      });
+
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      const wp = await client.watchProviders(107, 'tv');
+
+      expect(wp.providers).toEqual([
+        { id: 'netflix', name: 'Netflix', type: 'flatrate' },
+        { id: 'prime', name: 'Amazon Prime Video', type: 'flatrate' },
+        { id: 'appletv', name: 'Apple TV Plus', type: 'flatrate' },
+      ]);
+      expect(wp.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('returns empty when the region has no data', async () => {
+      const fetch = mockFetch({ results: { GB: { flatrate: [] } } });
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      const wp = await client.watchProviders(107, 'tv', 'US');
+      expect(wp.providers).toEqual([]);
+      expect(wp.updatedAt).toBeTruthy();
+    });
+
+    it('honors a custom region', async () => {
+      const fetch = mockFetch({
+        results: { GB: { flatrate: [{ provider_id: 8, provider_name: 'Netflix UK' }] } },
+      });
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      const wp = await client.watchProviders(107, 'tv', 'GB');
+      expect(wp.providers[0].id).toBe('netflix');
+    });
+  });
+
   describe('TMDB_IMAGE helpers', () => {
     it('builds poster + backdrop URLs from paths, returning null for null', () => {
       expect(TMDB_IMAGE.poster('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');
