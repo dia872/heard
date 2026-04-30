@@ -195,6 +195,41 @@ describe('TmdbClient', () => {
     });
   });
 
+  describe('personCredits', () => {
+    it('returns person info plus credits sorted by popularity desc, dedup by id', async () => {
+      const fetch = mockFetch({
+        id: 5,
+        name: 'Zendaya',
+        profile_path: '/z.jpg',
+        known_for_department: 'Acting',
+        place_of_birth: 'Oakland, California, USA',
+        combined_credits: {
+          cast: [
+            { id: 200, media_type: 'tv', name: 'Euphoria', first_air_date: '2019-06-16',
+              vote_average: 8.4, popularity: 350, poster_path: '/e.jpg', character: 'Rue' },
+            // Duplicate (same id, different role) — should be deduped.
+            { id: 200, media_type: 'tv', name: 'Euphoria', first_air_date: '2019-06-16',
+              vote_average: 8.4, popularity: 350, poster_path: '/e.jpg', character: 'Rue (variant)' },
+            { id: 105, media_type: 'movie', title: 'Dune: Part Two', release_date: '2024-03-01',
+              vote_average: 8.2, popularity: 600, poster_path: '/d.jpg', character: 'Chani' },
+            // Person credits sometimes include person rows — drop them.
+            { id: 1, media_type: 'person', name: 'Self',
+              vote_average: 0, popularity: 0, poster_path: null },
+          ],
+        },
+      });
+
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      const person = await client.personCredits(5);
+
+      expect(person.name).toBe('Zendaya');
+      expect(person.placeOfBirth).toBe('Oakland, California, USA');
+      // Popularity-sorted: Dune (600) before Euphoria (350); person row dropped.
+      expect(person.credits.map((c) => c.id)).toEqual([105, 200]);
+      expect(person.credits[0].character).toBe('Chani');
+    });
+  });
+
   describe('TMDB_IMAGE helpers', () => {
     it('builds poster + backdrop URLs from paths, returning null for null', () => {
       expect(TMDB_IMAGE.poster('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');

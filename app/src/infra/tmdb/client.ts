@@ -9,9 +9,23 @@ import type {
   TmdbCastMember,
   TmdbWatchProvider,
   TmdbWatchProviders,
+  TmdbPersonCredit,
   MediaType,
   StreamerId,
 } from '../../types';
+
+export interface PersonDetail {
+  id: number;
+  name: string;
+  profilePath: string | null;
+  knownForDepartment: string;
+  placeOfBirth: string | null;
+  /**
+   * Combined movie + TV credits, sorted by popularity desc.
+   * Powers the actor-detail filmography grid.
+   */
+  credits: TmdbPersonCredit[];
+}
 
 export interface TitleDetail extends TmdbTitle {
   cast: TmdbCastMember[];
@@ -114,6 +128,46 @@ export class TmdbClient {
     };
   }
 
+  /**
+   * Person detail with combined credits sorted by popularity (descending).
+   * Backs the actor-detail screen's filmography grid.
+   */
+  async personCredits(id: number): Promise<PersonDetail> {
+    const data = await this.get<TmdbRawPerson>(
+      `/person/${id}`,
+      { append_to_response: 'combined_credits' }
+    );
+    const cast = data.combined_credits?.cast ?? [];
+    const credits: TmdbPersonCredit[] = cast
+      .filter((c) => c.media_type === 'movie' || c.media_type === 'tv')
+      .map((c) => {
+        const mt = c.media_type as MediaType;
+        const dateStr = mt === 'movie' ? c.release_date : c.first_air_date;
+        return {
+          id: c.id,
+          title: (mt === 'movie' ? c.title : c.name) ?? '',
+          year: dateStr ? dateStr.slice(0, 4) : null,
+          mediaType: mt,
+          voteAverage: c.vote_average ?? 0,
+          popularity: c.popularity ?? 0,
+          posterPath: c.poster_path,
+          character: c.character ?? undefined,
+        };
+      })
+      // De-dup: TMDB occasionally lists the same title twice with different roles.
+      .filter((c, i, arr) => arr.findIndex((o) => o.id === c.id) === i)
+      .sort((a, b) => b.popularity - a.popularity);
+
+    return {
+      id: data.id,
+      name: data.name,
+      profilePath: data.profile_path,
+      knownForDepartment: data.known_for_department ?? 'Acting',
+      placeOfBirth: data.place_of_birth ?? null,
+      credits,
+    };
+  }
+
   // ── internals ───────────────────────────────────────────────────────────
 
   private async get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
@@ -185,6 +239,28 @@ function mapWatchProviders(region: TmdbRawRegion): TmdbWatchProvider[] {
   consume(region.buy, 'buy');
   consume(region.free, 'free');
   return out;
+}
+
+interface TmdbRawPerson {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department?: string;
+  place_of_birth?: string | null;
+  combined_credits?: {
+    cast?: Array<{
+      id: number;
+      media_type: string;
+      title?: string;
+      name?: string;
+      release_date?: string;
+      first_air_date?: string;
+      vote_average?: number;
+      popularity?: number;
+      poster_path: string | null;
+      character?: string | null;
+    }>;
+  };
 }
 
 interface TmdbRawDetail {
