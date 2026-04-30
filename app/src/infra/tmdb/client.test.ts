@@ -75,6 +75,35 @@ describe('TmdbClient', () => {
     });
   });
 
+  describe('search', () => {
+    it('hits /search/multi with the query and filters to movie+tv', async () => {
+      const fetch = mockFetch({
+        results: [
+          { id: 107, media_type: 'tv', name: 'Severance', first_air_date: '2022-01-01',
+            vote_average: 8.7, popularity: 380, poster_path: '/p.jpg', backdrop_path: null, overview: '' },
+          { id: 1, media_type: 'person', name: 'Some Actor',
+            vote_average: 0, popularity: 0, poster_path: null, backdrop_path: null, overview: '' },
+        ],
+      });
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      const results = await client.search('severance');
+
+      const url = (fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(url).toContain('/search/multi');
+      expect(url).toContain('query=severance');
+      expect(url).toContain('include_adult=false');
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('Severance');
+    });
+
+    it('returns empty array for empty query without hitting the network', async () => {
+      const fetch = mockFetch({ results: [] });
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      expect(await client.search('  ')).toEqual([]);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('TMDB_IMAGE helpers', () => {
     it('builds poster + backdrop URLs from paths, returning null for null', () => {
       expect(TMDB_IMAGE.poster('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');

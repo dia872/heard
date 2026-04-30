@@ -39,6 +39,21 @@ export class TmdbClient {
       .map(toTmdbTitle);
   }
 
+  /**
+   * Multi-search across movie + TV. Backs the manual disambiguation
+   * UI when extraction returns 'med' or 'low' confidence.
+   */
+  async search(query: string): Promise<TmdbTitle[]> {
+    if (!query.trim()) return [];
+    const data = await this.get<{ results: TmdbRawListItem[] }>(
+      '/search/multi',
+      { query: query.trim(), include_adult: 'false' }
+    );
+    return data.results
+      .filter(isMovieOrTv)
+      .map(toTmdbTitle);
+  }
+
   // ── internals ───────────────────────────────────────────────────────────
 
   private async get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
