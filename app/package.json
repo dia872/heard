@@ -43,8 +43,10 @@
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.0",
     "babel-preset-expo": "^55.0.18",
+    "cross-fetch": "^4.1.0",
     "jest": "^30.3.0",
     "jest-expo": "^55.0.16",
+    "msw": "^2.14.2",
     "react-native-worklets": "^0.8.1",
     "ts-jest": "^29.4.9",
     "typescript": "~5.9.2"
