@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+
+# App: dependencies & build output
+app/node_modules/
+app/.expo/
+app/dist/
+app/web-build/
+app/ios/
+app/android/
+
+# App: environment
+app/.env
+app/.env.local
+app/.env*.local
+
+# App: native
+app/*.jks
+app/*.p8
+app/*.p12
+app/*.key
+app/*.mobileprovision
+app/*.orig.*
+
+# App: metro/expo
+app/.metro-health-check*
+app/expo-env.d.ts
+
+# App: tests
+app/coverage/
+app/junit.xml
+
+# Editors
+.vscode/
+.idea/
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log

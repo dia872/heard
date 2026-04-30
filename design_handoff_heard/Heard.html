@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Heard — Find what to watch from anywhere you heard about it</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #1f1d1a; font-family: 'Inter', sans-serif; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+  button { -webkit-tap-highlight-color: transparent; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  @keyframes heardSlideUp { from { transform: translateY(28px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes heardPulse { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(1.15); opacity: 0.15; } }
+  @keyframes heardBlink { 50% { opacity: 0; } }
+  @keyframes heardScan { 0% { left: -40%; } 100% { left: 100%; } }
+  @keyframes heardScanV { 0% { top: 0; } 100% { top: 100%; } }
+  @keyframes heardBoxIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="src/data.jsx"></script>
+<script type="text/babel" src="src/primitives.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="src/screens.jsx"></script>
+<script type="text/babel" src="src/capture.jsx"></script>
+<script type="text/babel" src="src/detail.jsx"></script>
+<script type="text/babel" src="src/app.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect: useEffectR, useMemo: useMemoR } = React;
+const IOSFrame = window.IOSDevice;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "view": "single",
+  "showOnboarding": false,
+  "accent": "rust"
+}/*EDITMODE-END*/;
+
+const ACCENTS = {
+  rust:  { rust: "#c2410c", rustSoft: "#fff3e6", label: "Rust" },
+  ink:   { rust: "#1a1a1a", rustSoft: "#eeeae2", label: "Ink mono" },
+  cobalt:{ rust: "#1d4ed8", rustSoft: "#e6efff", label: "Cobalt" },
+  moss:  { rust: "#1a8f4f", rustSoft: "#e6f5ec", label: "Moss" },
+};
+
+function Root() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  // apply accent
+  useEffectR(() => {
+    const a = ACCENTS[tweaks.accent] || ACCENTS.rust;
+    window.HEARD_COLORS.rust = a.rust;
+    window.HEARD_COLORS.rustSoft = a.rustSoft;
+  }, [tweaks.accent]);
+
+  return (
+    <>
+      {tweaks.view === "canvas" ? <Canvas tweaks={tweaks} /> : <SinglePhone tweaks={tweaks} variant={tweaks.view} />}
+      <TweaksPanel title="Tweaks · heard.">
+        <TweakSection title="View">
+          <TweakRadio
+            label="Layout" value={tweaks.view} onChange={(v) => setTweak('view', v)}
+            options={[
+              { value: 'canvas', label: 'Canvas' },
+              { value: 'single', label: 'Single' },
+            ]} />
+        </TweakSection>
+        <TweakSection title="Flow">
+          <TweakToggle label="Show onboarding" value={tweaks.showOnboarding} onChange={(v) => setTweak('showOnboarding', v)} />
+        </TweakSection>
+        <TweakSection title="Accent">
+          <TweakSelect label="Color" value={tweaks.accent} onChange={(v) => setTweak('accent', v)}
+            options={Object.entries(ACCENTS).map(([k, v]) => ({ value: k, label: v.label }))} />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+// Wrap an iPhone, key it to a forced initial route
+function Phone({ initial, tweaks, label }) {
+  // remount when initial route changes
+  return (
+    <IOSFrame>
+      <PhoneStage initial={initial} tweaks={tweaks} key={JSON.stringify(initial) + tweaks.accent} />
+    </IOSFrame>
+  );
+}
+
+// Variant of HeardApp that takes initial state setup
+function PhoneStage({ initial = {}, tweaks }) {
+  const [stack, setStack] = useState(initial.stack || [{ kind: "front" }]);
+  const [showCapture, setShowCapture] = useState(initial.capture || false);
+  const [captureStep, setCaptureStep] = useState(initial.captureStep || null);
+  const [signupCtx, setSignupCtx] = useState(initial.signup || null);
+  const [activeMood, setActiveMood] = useState(initial.mood || null);
+  const [activeStreamer, setActiveStreamer] = useState(initial.streamer || null);
+  const [showOnboarding, setShowOnboarding] = useState(!!initial.onboarding);
+
+  const [ownedIds, setOwnedIds] = useState(["netflix", "max"]);
+  const [saved, setSaved] = useState(() => [
+    window.HEARD_DATA.MockAPI.title(107),
+    window.HEARD_DATA.MockAPI.title(101),
+    window.HEARD_DATA.MockAPI.title(105),
+  ]);
+  const [inbox, setInbox] = useState(() => initial.inbox === "empty" ? [] : [
+    { id: "i1", item: window.HEARD_DATA.MockAPI.title(130), source: "voice", confidence: "medium", snippet: "the british spy thing on apple", ago: "2 days ago" },
+    { id: "i2", item: window.HEARD_DATA.MockAPI.title(122), source: "paste", confidence: "high", snippet: "Two deeply connected childhood friends are wrenched apart…", ago: "5 days ago" },
+    { id: "i3", item: window.HEARD_DATA.MockAPI.title(111), source: "screenshot", confidence: "medium", snippet: "yorgos lanthimos film with bella", ago: "1 week ago" },
+  ]);
+
+  const top = stack[stack.length - 1];
+  // streamer pages keep bottom nav too — they're a destination, not a deep modal
+  const tab = top.kind === "front" || top.kind === "inbox" || top.kind === "mood" || top.kind === "saved" || top.kind === "trends" ? top.kind
+            : top.kind === "streamer" ? "trends" : null;
+
+  function go(node) { setStack(s => [...s, node]); }
+  function back() { setStack(s => s.length > 1 ? s.slice(0, -1) : s); }
+  function setTab(t) { setStack([{ kind: t }]); }
+
+  const ctx = {
+    setScreen: setTab,
+    openCapture: () => setShowCapture(true),
+    openTitle: (item) => go({ kind: "title", item }),
+    openActor: (actor) => go({ kind: "actor", actor }),
+    openMood: (mood) => { setActiveMood(mood); setTab("mood"); },
+    openSignupExplore: (streamer, item) => setSignupCtx({ streamer, item }),
+    openStreamer: (s) => { setActiveStreamer(s); go({ kind: "streamer", streamer: s }); },
+    activeMood, setActiveMood, ownedIds, saved, inbox,
+    isSaved: (id) => saved.some(s => s.id === id),
+    toggleSaved: (item) => setSaved(s => s.find(x => x.id === item.id) ? s.filter(x => x.id !== item.id) : [item, ...s]),
+    removeSaved: (item) => setSaved(s => s.filter(x => x.id !== item.id)),
+    addToInbox: ({ item, snippet, confidence, source }) => {
+      if (!item) return;
+      setInbox(i => [{ id: "i" + Date.now(), item, snippet, confidence, source, ago: "just now" }, ...i.filter(x => x.item.id !== item.id)]);
+    },
+    saveFromInbox: (entry) => {
+      setSaved(s => s.find(x => x.id === entry.item.id) ? s : [entry.item, ...s]);
+      setInbox(i => i.filter(x => x.id !== entry.id));
+    },
+    dismissInbox: (entry) => setInbox(i => i.filter(x => x.id !== entry.id)),
+    archiveInbox: (entry) => setInbox(i => i.filter(x => x.id !== entry.id)),
+  };
+
+  if (showOnboarding) {
+    return <Onboarding onComplete={(ids) => { if (ids.length) setOwnedIds(ids); setShowOnboarding(false); }} />;
+  }
+
+  return (
+    <div style={{ height: "100%", background: HEARD_COLORS.bg, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden", fontFamily: SANS, color: HEARD_COLORS.ink }}>
+      {stack.length > 1 && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 5, padding: "52px 16px 8px", display: "flex", justifyContent: "space-between", alignItems: "center", pointerEvents: "none" }}>
+          <button onClick={back} style={{ pointerEvents: "auto", background: top.kind === "streamer" || top.kind === "title" ? "rgba(0,0,0,0.4)" : "rgba(250,248,243,0.9)", backdropFilter: "blur(10px)", border: "none", borderRadius: 999, padding: "7px 13px", fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: top.kind === "streamer" || top.kind === "title" ? "#fff" : HEARD_COLORS.ink, cursor: "pointer" }}>← Back</button>
+        </div>
+      )}
+
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: tab ? 76 : 22 }}>
+        {top.kind === "front" && <FrontScreen ctx={ctx} />}
+        {top.kind === "inbox" && <InboxScreen ctx={ctx} />}
+        {top.kind === "mood" && <MoodScreen ctx={ctx} />}
+        {top.kind === "saved" && <SavedScreen ctx={ctx} />}
+        {top.kind === "trends" && <TrendsScreen ctx={ctx} />}
+        {top.kind === "streamer" && <StreamerScreen ctx={ctx} streamer={top.streamer} />}
+        {top.kind === "title" && <TitleDetail ctx={ctx} item={top.item} />}
+        {top.kind === "actor" && <ActorDetail ctx={ctx} actor={top.actor} />}
+      </div>
+
+      {tab && (
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(250,248,243,0.95)", backdropFilter: "blur(16px)", borderTop: `1px solid ${HEARD_COLORS.hair}`, padding: "10px 22px 14px", display: "flex", justifyContent: "space-around", alignItems: "center", zIndex: 4 }}>
+          {[
+            { k: "front", l: "Read", g: "M" },
+            { k: "trends", l: "Trends", g: "T" },
+            { k: "_capture", l: "Capture", g: "◉" },
+            { k: "inbox", l: "Inbox", g: "I", count: inbox.length },
+            { k: "saved", l: "Saved", g: "S", count: saved.length },
+          ].map(t => {
+            const active = tab === t.k;
+            const isCapture = t.k === "_capture";
+            return (
+              <button key={t.k}
+                onClick={() => isCapture ? setShowCapture(true) : setTab(t.k)}
+                style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "2px 4px", position: "relative" }}>
+                <div style={{ width: isCapture ? 36 : 24, height: isCapture ? 36 : 24, borderRadius: isCapture ? "50%" : 0, background: isCapture ? HEARD_COLORS.rust : "transparent", color: isCapture ? "#fff" : (active ? HEARD_COLORS.ink : HEARD_COLORS.faint), display: "flex", alignItems: "center", justifyContent: "center", fontFamily: SERIF, fontSize: isCapture ? 16 : 14, fontStyle: "italic", fontWeight: 500, marginBottom: isCapture ? 0 : 2 }}>{t.g}</div>
+                {!isCapture && <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 600, color: active ? HEARD_COLORS.ink : HEARD_COLORS.faint, letterSpacing: "0.1em", textTransform: "uppercase" }}>{t.l}</div>}
+                {isCapture && <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 600, color: HEARD_COLORS.rust, letterSpacing: "0.1em", textTransform: "uppercase" }}>Capture</div>}
+                {!isCapture && t.count > 0 && (
+                  <div style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: HEARD_COLORS.rust, color: "#fff", fontFamily: MONO, fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.count}</div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {showCapture && <CaptureFlow ctx={ctx} onClose={() => setShowCapture(false)} />}
+      {signupCtx && <SignupExplore ctx={ctx} streamer={signupCtx.streamer} item={signupCtx.item} onClose={() => setSignupCtx(null)} />}
+    </div>
+  );
+}
+
+function Canvas({ tweaks }) {
+  const t102 = window.HEARD_DATA.MockAPI.title(102);
+  const t107 = window.HEARD_DATA.MockAPI.title(107);
+  const t105 = window.HEARD_DATA.MockAPI.title(105);
+  const apple = window.HEARD_DATA.STREAMER_BY_ID.appletv;
+  const pedro = window.HEARD_DATA.ACTORS[3];
+
+  return (
+    <DesignCanvas title="heard." subtitle="Find what to watch from anywhere you heard about it. PRD-driven prototype, mobile-first.">
+      <DCSection id="entry" title="01 · The way in">
+        <DCArtboard id="onboarding" label="Onboarding · No signup" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ onboarding: true }} />
+        </DCArtboard>
+        <DCArtboard id="front" label="Front page · Issue masthead" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "front" }] }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="capture" title="02 · The hero · Capture from anywhere">
+        <DCArtboard id="capture-menu" label="Capture menu" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ capture: true }} />
+        </DCArtboard>
+        <DCArtboard id="capture-listen" label="Voice · listening" width={390} height={844}>
+          <CaptureListenStandalone />
+        </DCArtboard>
+        <DCArtboard id="capture-paste" label="Paste · article" width={390} height={844}>
+          <CapturePasteStandalone />
+        </DCArtboard>
+        <DCArtboard id="capture-shot" label="Screenshot · OCR + face detect" width={390} height={844}>
+          <CaptureShotStandalone />
+        </DCArtboard>
+        <DCArtboard id="capture-tiktok" label="TikTok / Reel · audio + caption + OCR" width={390} height={844}>
+          <CaptureTikTokStandalone />
+        </DCArtboard>
+        <DCArtboard id="capture-result" label="Result · confidence" width={390} height={844}>
+          <CaptureResultStandalone />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="discover" title="03 · The library">
+        <DCArtboard id="inbox" label="Inbox · Auto-saved captures" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "inbox" }] }} />
+        </DCArtboard>
+        <DCArtboard id="inbox-empty" label="Inbox · Empty state" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "inbox" }], inbox: "empty" }} />
+        </DCArtboard>
+        <DCArtboard id="saved" label="Saved · Filter by your platforms" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "saved" }] }} />
+        </DCArtboard>
+        <DCArtboard id="mood" label="Mood · Editorial drill-down" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "mood" }], mood: window.HEARD_DATA.MOODS[1] }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="trends" title="03b · Trends · What's loud right now">
+        <DCArtboard id="trends-all" label="Trending · Everywhere" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "trends" }] }} />
+        </DCArtboard>
+        <DCArtboard id="streamer-apple" label="Streamer · Apple TV+ browse" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "streamer", streamer: apple }] }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="title" title="04 · The title page · Honest 'where to watch'">
+        <DCArtboard id="title-have" label="On platforms you have" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "title", item: t102 }] }} />
+        </DCArtboard>
+        <DCArtboard id="title-elsewhere" label="Available elsewhere" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "title", item: t107 }] }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="actor" title="05 · Actor · Filmography by popularity (the IMDb fix)">
+        <DCArtboard id="actor-pedro" label="Pedro Pascal · ranked" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "actor", actor: pedro }] }} />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="signup" title="06 · 'Before you sign up'  · The Apple TV+ moment">
+        <DCArtboard id="signup-trigger" label="Trigger · 'Sign up' on Severance" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "title", item: t107 }] }} />
+        </DCArtboard>
+        <DCArtboard id="signup-explore" label="Explore before you commit" width={390} height={844}>
+          <Phone tweaks={tweaks} initial={{ stack: [{ kind: "title", item: t107 }], signup: { streamer: apple, item: t107 } }} />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+function SinglePhone({ tweaks }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#1f1d1a", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <Phone tweaks={tweaks} initial={{}} />
+    </div>
+  );
+}
+
+// Standalone capture-step previews (so artboards show isolated states)
+function CaptureListenStandalone() {
+  return <IOSFrame><div style={{ height: "100%", background: HEARD_COLORS.bg, position: "relative", overflow: "hidden" }}>
+    <CaptureFlowAt step="listening" />
+  </div></IOSFrame>;
+}
+function CapturePasteStandalone() {
+  return <IOSFrame><div style={{ height: "100%", background: HEARD_COLORS.bg, position: "relative", overflow: "hidden" }}>
+    <CaptureFlowAt step="pasting" />
+  </div></IOSFrame>;
+}
+function CaptureShotStandalone() {
+  return <IOSFrame><div style={{ height: "100%", background: HEARD_COLORS.bg, position: "relative", overflow: "hidden" }}>
+    <CaptureFlowAt step="screenshot" />
+  </div></IOSFrame>;
+}
+function CaptureTikTokStandalone() {
+  return <IOSFrame><div style={{ height: "100%", background: HEARD_COLORS.bg, position: "relative", overflow: "hidden" }}>
+    <CaptureFlowAt step="tiktok" />
+  </div></IOSFrame>;
+}
+function CaptureResultStandalone() {
+  return <IOSFrame><div style={{ height: "100%", background: HEARD_COLORS.bg, position: "relative", overflow: "hidden" }}>
+    <CaptureFlowAt step="result" />
+  </div></IOSFrame>;
+}
+
+// Lightweight wrapper that drops you in a specific capture step
+function CaptureFlowAt({ step }) {
+  const [_, setS] = useState(0);
+  const onClose = () => {};
+
+  // For "result" step, fabricate a result
+  if (step === "result") {
+    const item = window.HEARD_DATA.MockAPI.title(107);
+    return (
+      <div style={{ position: "absolute", inset: 0, background: HEARD_COLORS.bg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ padding: "16px 22px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${HEARD_COLORS.hair}` }}>
+          <div style={{ fontFamily: MONO, fontSize: 9, color: "#999", letterSpacing: "0.2em", textTransform: "uppercase" }}>Capture</div>
+          <button style={{ background: "transparent", border: "none", fontFamily: SERIF, fontSize: 22, color: HEARD_COLORS.ink, cursor: "pointer", lineHeight: 1, fontWeight: 300 }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <ResultPanelInline result={item} confidence="high" reasoning="matched 'severance', 'innie', 'lumon' — 3 distinctive keywords." input="severance lumon innie outie apple tv" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "absolute", inset: 0, background: HEARD_COLORS.bg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "16px 22px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${HEARD_COLORS.hair}` }}>
+        <div style={{ fontFamily: MONO, fontSize: 9, color: "#999", letterSpacing: "0.2em", textTransform: "uppercase" }}>Capture</div>
+        <button style={{ background: "transparent", border: "none", fontFamily: SERIF, fontSize: 22, color: HEARD_COLORS.ink, cursor: "pointer", lineHeight: 1, fontWeight: 300 }}>✕</button>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {step === "listening" && <ListeningInline />}
+        {step === "pasting" && <PastingInline />}
+        {step === "screenshot" && (() => { const P = window.ScreenshotPanel; return <P onResolve={() => {}} />; })()}
+        {step === "tiktok" && (() => { const P = window.TikTokPanel; return <P onResolve={() => {}} />; })()}
+      </div>
+    </div>
+  );
+}
+
+function ListeningInline() {
+  const [t, setT] = useState("");
+  const target = "the british spy thing on apple tv";
+  useEffectR(() => {
+    let i = 0;
+    const id = setInterval(() => { i++; setT(target.slice(0, i)); if (i >= target.length) clearInterval(id); }, 70);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div style={{ padding: "32px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+      <div style={{ fontFamily: MONO, fontSize: 9, color: HEARD_COLORS.rust, letterSpacing: "0.25em", textTransform: "uppercase", fontWeight: 600, marginBottom: 28 }}>Listening</div>
+      <div style={{ position: "relative", width: 140, height: 140, marginBottom: 32 }}>
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: HEARD_COLORS.rust, opacity: 0.1, animation: "heardPulse 1.6s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", inset: 16, borderRadius: "50%", background: HEARD_COLORS.rust, opacity: 0.18, animation: "heardPulse 1.6s ease-in-out infinite 0.4s" }} />
+        <div style={{ position: "absolute", inset: 32, borderRadius: "50%", background: HEARD_COLORS.rust, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: SERIF, fontSize: 30 }}>◉</div>
+      </div>
+      <div style={{ fontFamily: SERIF, fontSize: 22, fontStyle: "italic", color: HEARD_COLORS.ink, lineHeight: 1.25, letterSpacing: "-0.02em", maxWidth: 280, minHeight: 64 }}>
+        {t ? `"${t}"` : "..."}<span style={{ animation: "heardBlink 0.9s steps(2) infinite" }}>|</span>
+      </div>
+    </div>
+  );
+}
+
+function PastingInline() {
+  const sample = "Pedro Pascal and Bella Ramsey deliver a haunting performance in this post-apocalyptic adaptation of the beloved video game…";
+  return (
+    <div style={{ padding: "24px 22px" }}>
+      <div style={{ fontFamily: MONO, fontSize: 9, color: "#999", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 12 }}>Paste anything · article, link, dm</div>
+      <div style={{ width: "100%", minHeight: 140, padding: "14px", border: `1px solid ${HEARD_COLORS.ink}`, borderRadius: 3, background: "#fff", fontFamily: SERIF, fontSize: 14, color: HEARD_COLORS.ink, lineHeight: 1.5 }}>{sample}<span style={{ animation: "heardBlink 0.9s steps(2) infinite" }}>|</span></div>
+      <button style={{ marginTop: 22, width: "100%", padding: "12px", background: HEARD_COLORS.ink, color: HEARD_COLORS.bg, border: "none", borderRadius: 3, fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase" }}>Find the title →</button>
+    </div>
+  );
+}
+
+function ScreenshotInline() {
+  return (
+    <div style={{ padding: "24px 22px" }}>
+      <div style={{ fontFamily: MONO, fontSize: 9, color: "#999", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 12 }}>Drop a screenshot</div>
+      <div style={{ width: "100%", aspectRatio: "4/5", border: `2px solid ${HEARD_COLORS.ink}`, borderRadius: 4, background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, position: "relative", overflow: "hidden" }}>
+        <div style={{ width: "100%", aspectRatio: "4/5", maxWidth: 200, background: "#1a1a1a", borderRadius: 3, position: "relative", overflow: "hidden" }}>
+          <img src={`${window.HEARD_DATA.BG}/sSMHSdoGUPXXLrWHDhBL2YK8Zqf.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.7))" }} />
+          <div style={{ position: "absolute", bottom: 8, left: 8, right: 8, fontFamily: SERIF, fontSize: 10, color: "#fff", fontStyle: "italic" }}>Severance · Apple TV+</div>
+          <div style={{ position: "absolute", inset: 0, border: `2px dashed ${HEARD_COLORS.rust}`, animation: "heardPulse 2s ease-in-out infinite" }} />
+        </div>
+        <div style={{ marginTop: 16, fontFamily: MONO, fontSize: 9, color: HEARD_COLORS.rust, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 }}>Reading the image…</div>
+      </div>
+    </div>
+  );
+}
+
+function ResultPanelInline({ result, confidence, reasoning, input }) {
+  const { POSTER } = window.HEARD_DATA;
+  return (
+    <div style={{ padding: "20px 22px 24px" }}>
+      <div style={{ fontFamily: MONO, fontSize: 9, color: HEARD_COLORS.rust, letterSpacing: "0.25em", textTransform: "uppercase", fontWeight: 600, marginBottom: 14 }}>Your match</div>
+      <div style={{ display: "flex", gap: 14, marginBottom: 18 }}>
+        <div style={{ width: 100, aspectRatio: "2/3", borderRadius: 3, overflow: "hidden", flexShrink: 0, boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}>
+          <img src={`${POSTER}${result.poster_path}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 500, fontStyle: "italic", color: HEARD_COLORS.ink, lineHeight: 1, letterSpacing: "-0.025em", marginBottom: 6 }}>{result.title}</div>
+          <div style={{ fontFamily: MONO, fontSize: 9, color: HEARD_COLORS.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>{result.year} · Series</div>
+          <ConfidenceMeter level={confidence} />
+        </div>
+      </div>
+      <div style={{ padding: "12px 14px", background: HEARD_COLORS.bg2, borderRadius: 3, marginBottom: 14 }}>
+        <div style={{ fontFamily: MONO, fontSize: 8, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600, color: HEARD_COLORS.rust, marginBottom: 6 }}>Why we think so</div>
+        <div style={{ fontFamily: SERIF, fontSize: 12, color: HEARD_COLORS.ink, lineHeight: 1.4, fontStyle: "italic" }}>{reasoning}</div>
+      </div>
+      <p style={{ fontFamily: SERIF, fontSize: 13, lineHeight: 1.5, color: "#444", marginBottom: 18 }}>{result.overview}</p>
+      <button style={{ width: "100%", padding: "13px", background: HEARD_COLORS.ink, color: HEARD_COLORS.bg, border: "none", borderRadius: 3, fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase" }}>Save & open →</button>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>
