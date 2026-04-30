@@ -16,11 +16,17 @@ import {
   JetBrainsMono_500Medium,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createQueryClient } from '../src/state/queryClient';
+import { createPersister } from '../src/state/persister';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const [queryClient] = useState(() => createQueryClient());
+  const [persister] = useState(() => createPersister());
+
   const [fontsLoaded, fontError] = useFonts({
     Fraunces_400Regular,
     Fraunces_400Regular_Italic,
@@ -42,9 +48,14 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
-    </SafeAreaProvider>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister }}
+    >
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false }} />
+      </SafeAreaProvider>
+    </PersistQueryClientProvider>
   );
 }
