@@ -104,6 +104,47 @@ describe('TmdbClient', () => {
     });
   });
 
+  describe('titleDetail', () => {
+    it('returns shape with cast (capped at 12) and similar IDs', async () => {
+      const fetch = mockFetch({
+        id: 107, name: 'Severance', first_air_date: '2022-02-18',
+        vote_average: 8.7, popularity: 380, poster_path: '/p.jpg',
+        backdrop_path: '/b.jpg', overview: 'Mark...', episode_run_time: [50],
+        genres: [{ id: 1, name: 'Drama' }, { id: 2, name: 'Sci-Fi' }],
+        credits: {
+          cast: Array.from({ length: 20 }, (_, i) => ({
+            id: i + 1, name: `Actor ${i + 1}`, character: `Char ${i + 1}`,
+            profile_path: null, order: i,
+          })),
+        },
+        similar: { results: [{ id: 102 }, { id: 103 }] },
+      });
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      const detail = await client.titleDetail(107, 'tv');
+
+      const url = (fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(url).toContain('/tv/107');
+      expect(url).toContain('append_to_response=credits%2Csimilar');
+      expect(detail.title).toBe('Severance');
+      expect(detail.runtime).toBe(50);
+      expect(detail.genres).toEqual(['drama', 'sci-fi']);
+      expect(detail.cast).toHaveLength(12);
+      expect(detail.cast[0].name).toBe('Actor 1');
+      expect(detail.similarIds).toEqual([102, 103]);
+    });
+
+    it('uses runtime field for movies, not episode_run_time', async () => {
+      const fetch = mockFetch({
+        id: 105, title: 'Dune: Part Two', release_date: '2024-03-01',
+        vote_average: 8.2, popularity: 600, poster_path: null, backdrop_path: null,
+        overview: '', runtime: 166, genres: [],
+      });
+      const client = new TmdbClient({ apiKey: 'k', fetch });
+      const detail = await client.titleDetail(105, 'movie');
+      expect(detail.runtime).toBe(166);
+    });
+  });
+
   describe('TMDB_IMAGE helpers', () => {
     it('builds poster + backdrop URLs from paths, returning null for null', () => {
       expect(TMDB_IMAGE.poster('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');

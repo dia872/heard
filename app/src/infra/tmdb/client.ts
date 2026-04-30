@@ -6,8 +6,14 @@
 
 import type {
   TmdbTitle,
+  TmdbCastMember,
   MediaType,
 } from '../../types';
+
+export interface TitleDetail extends TmdbTitle {
+  cast: TmdbCastMember[];
+  similarIds: number[];
+}
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
@@ -54,6 +60,18 @@ export class TmdbClient {
       .map(toTmdbTitle);
   }
 
+  /**
+   * Title detail with cast and similar titles. Uses TMDB's
+   * append_to_response so we get everything in one request.
+   */
+  async titleDetail(id: number, mediaType: MediaType): Promise<TitleDetail> {
+    const data = await this.get<TmdbRawDetail>(
+      `/${mediaType}/${id}`,
+      { append_to_response: 'credits,similar' }
+    );
+    return toTitleDetail(data, mediaType);
+  }
+
   // ── internals ───────────────────────────────────────────────────────────
 
   private async get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
@@ -89,6 +107,32 @@ interface TmdbRawListItem {
   genre_ids?: number[];
 }
 
+interface TmdbRawDetail {
+  id: number;
+  title?: string;
+  name?: string;
+  release_date?: string;
+  first_air_date?: string;
+  vote_average: number;
+  popularity: number;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  overview: string;
+  runtime?: number;             // movie
+  episode_run_time?: number[];  // tv
+  genres?: { id: number; name: string }[];
+  credits?: {
+    cast?: Array<{
+      id: number;
+      name: string;
+      character?: string;
+      profile_path: string | null;
+      order: number;
+    }>;
+  };
+  similar?: { results?: Array<{ id: number }> };
+}
+
 function isMovieOrTv(it: TmdbRawListItem): boolean {
   return it.media_type === 'movie' || it.media_type === 'tv';
 }
@@ -109,6 +153,43 @@ function toTmdbTitle(it: TmdbRawListItem): TmdbTitle {
     // Genres come back as IDs from list endpoints; resolve in detail call.
     // For trending lists we leave empty rather than ship stale ID arrays.
     genres: [],
+  };
+}
+
+function toTitleDetail(d: TmdbRawDetail, mediaType: MediaType): TitleDetail {
+  const dateStr = mediaType === 'movie' ? d.release_date : d.first_air_date;
+  const runtime =
+    mediaType === 'movie'
+      ? d.runtime
+      : d.episode_run_time && d.episode_run_time.length > 0
+        ? d.episode_run_time[0]
+        : undefined;
+
+  const cast: TmdbCastMember[] =
+    d.credits?.cast?.slice(0, 12).map((c) => ({
+      id: c.id,
+      name: c.name,
+      character: c.character ?? '',
+      profilePath: c.profile_path,
+      order: c.order,
+    })) ?? [];
+
+  const similarIds = (d.similar?.results ?? []).map((s) => s.id).slice(0, 12);
+
+  return {
+    id: d.id,
+    title: (mediaType === 'movie' ? d.title : d.name) ?? '',
+    year: dateStr ? dateStr.slice(0, 4) : null,
+    mediaType,
+    voteAverage: d.vote_average,
+    popularity: d.popularity,
+    posterPath: d.poster_path,
+    backdropPath: d.backdrop_path,
+    overview: d.overview,
+    runtime,
+    genres: d.genres?.map((g) => g.name.toLowerCase()) ?? [],
+    cast,
+    similarIds,
   };
 }
 
