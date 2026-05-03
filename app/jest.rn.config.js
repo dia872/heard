@@ -2,6 +2,8 @@
 module.exports = {
   displayName: 'rn',
   preset: 'jest-expo',
+  rootDir: '.',
+  roots: ['<rootDir>'],
   testMatch: [
     '<rootDir>/src/**/*.rn.test.ts',
     '<rootDir>/src/**/*.rn.test.tsx',
