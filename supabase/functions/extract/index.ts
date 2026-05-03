@@ -17,6 +17,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { checkRateLimit, RateLimitExceeded } from '../_shared/rateLimit.ts';
+import { callAnthropic } from '../_shared/anthropic.ts';
+import { searchTmdb } from '../_shared/tmdb.ts';
 
 interface ExtractRequest {
   text: string;
@@ -125,14 +127,78 @@ async function writeCache(textHash: string, source: string, result: ExtractResul
   });
 }
 
-// STUB — replaced in task 2.10 with: Anthropic Haiku → TMDB cross-ref → confidence.
+// Real extraction: Anthropic (Haiku) → TMDB cross-ref → confidence.
+// Escalates to Sonnet if Haiku returns 'low' confidence (cheap fallback;
+// ~5x more expensive but only fires on the ambiguous tail).
 async function stubExtract(req: ExtractRequest): Promise<ExtractResult> {
+  let claudeResult = await callAnthropic(req, 'claude-haiku-4-5-20251001');
+
+  // Escalate if Haiku is unsure and there's enough text to retry meaningfully.
+  if (claudeResult.confidence === 'low' && req.text.length > 24) {
+    try {
+      const sonnetResult = await callAnthropic(req, 'claude-sonnet-4-6');
+      // Only adopt Sonnet's answer if it actually produced a title.
+      if (sonnetResult.title) claudeResult = sonnetResult;
+    } catch {
+      // Sonnet failure is non-fatal; we keep Haiku's low-confidence answer.
+    }
+  }
+
+  // No title at all → nothing to validate against TMDB.
+  if (!claudeResult.title) {
+    return {
+      title: null, year: null, tmdbId: null, mediaType: null,
+      confidence: 'low', alts: [],
+    };
+  }
+
+  // Cross-reference with TMDB.
+  let tmdbMatches: Awaited<ReturnType<typeof searchTmdb>> = [];
+  try {
+    tmdbMatches = await searchTmdb(claudeResult.title, claudeResult.mediaType ?? undefined);
+  } catch {
+    // TMDB hiccup — return Claude's title without validation as low confidence.
+    return {
+      title: claudeResult.title,
+      year: claudeResult.year,
+      tmdbId: null,
+      mediaType: claudeResult.mediaType,
+      confidence: 'low',
+      alts: [],
+    };
+  }
+
+  // Best match: highest popularity (TMDB sort already does this).
+  const best = tmdbMatches[0];
+  if (!best) {
+    return {
+      title: claudeResult.title,
+      year: claudeResult.year,
+      tmdbId: null,
+      mediaType: claudeResult.mediaType,
+      confidence: 'low',
+      alts: [],
+    };
+  }
+
+  // Other plausible matches → med-confidence alts.
+  const alts = tmdbMatches.slice(1, 5).map((m) => ({
+    tmdbId: m.tmdbId,
+    title: m.title,
+    year: m.year,
+    mediaType: m.mediaType,
+  }));
+
+  // Confidence: client-side gate runs again, but a useful server hint:
+  // unique strong match → high; multiple plausible → med.
+  const confidence: ExtractResult['confidence'] = alts.length === 0 ? 'high' : 'med';
+
   return {
-    title: null,
-    year: null,
-    tmdbId: null,
-    mediaType: null,
-    confidence: 'low',
-    alts: [],
+    title: best.title,
+    year: best.year,
+    tmdbId: best.tmdbId,
+    mediaType: best.mediaType,
+    confidence,
+    alts,
   };
 }
