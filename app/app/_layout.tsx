@@ -54,7 +54,21 @@ export default function RootLayout() {
     >
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack
+          screenOptions={{ headerShown: false }}
+        >
+          {/* Tab navigator */}
+          <Stack.Screen name="(tabs)" />
+
+          {/* Detail screens — pushed onto the stack */}
+          <Stack.Screen name="title/[id]" />
+          <Stack.Screen name="actor/[id]" />
+          <Stack.Screen name="streamer/[id]" />
+
+          {/* Modals — slide up from the bottom */}
+          <Stack.Screen name="capture" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="signup-explore" options={{ presentation: 'modal' }} />
+        </Stack>
       </SafeAreaProvider>
     </PersistQueryClientProvider>
   );
