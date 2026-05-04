@@ -353,6 +353,19 @@ Apple, Google, or a streamer could build this in.
 Showing TMDB metadata is fine. Reproducing TikTok/Instagram screenshots in marketing is a separate concern.
 **Mitigation:** User-uploaded screenshots stay on-device for OCR. Server side, only the extracted title text is retained, not the image.
 
+### Risk: TMDB API commercial licensing
+TMDB's free/Developer tier is **non-commercial only**. Three things in Heard's plan trigger TMDB's commercial-use clauses:
+1. Affiliate revenue (Amazon Associates, Impact, Rakuten, CJ) → §1.C.7 "derive revenues from the use or provision of TMDB" + §2.A.3 "driving traffic or generating revenue."
+2. AI extraction pipeline that cross-references Claude's output against TMDB → §1.C.10 prohibits TMDB use "in connection with… an ML or AI based Application."
+3. Operating as a "destination" app per §2.A.3.
+TMDB has unilateral termination rights ("at any time for any reason," §1.D) and "sole discretion" to determine commercial use. TMDB's commercial plan is **$149/mo recurring**.
+**Mitigation:**
+- v0.5 closed alpha runs on a personal/Developer key (50–100 invited users, no real revenue, used for product validation — falls within personal-use semantics).
+- Attribution language added per §3 from day 1 in app About screen: *"This app uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB."*
+- 2 weeks before v1.0 public launch: sign TMDB commercial agreement, swap key in `.env` + Supabase secrets (one env-var change, no code rewrite).
+- Watchmode (~$9/mo) wired as feature-flagged backup for watch-providers data, so a TMDB swap is a deploy not a rebuild.
+- Budget v1.0 with $149/mo TMDB line item baked into operating cost.
+
 ---
 
 ## 12. Success metrics
