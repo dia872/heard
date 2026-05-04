@@ -1,13 +1,12 @@
 // Tab layout — bottom navigation per the prototype: Front | Inbox |
 // Capture (the rust circle in the middle) | Trends | Saved.
 //
-// The Capture tab is special: tapping it doesn't switch tabs, it
-// opens the capture modal. Implemented as a separate Pressable that
-// preempts router navigation.
+// The Capture "tab" navigates to the /capture modal route (declared at
+// the root stack with presentation: 'modal'). Side effect of opening
+// the modal also flips the ui-store flag for any downstream listeners.
 
-import { Tabs, useRouter } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
-import { useUiStore } from '../../src/state/uiStore';
+import { Tabs } from 'expo-router';
+import { Text, View } from 'react-native';
 
 const SERIF_GLYPHS = {
   front:   { glyph: 'R', label: 'Read' },
@@ -46,7 +45,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="capture"
         options={{
-          tabBarButton: () => <CaptureTabButton />,
+          tabBarIcon: () => <CaptureGlyph />,
+          tabBarAccessibilityLabel: 'Capture',
         }}
       />
       <Tabs.Screen
@@ -87,25 +87,15 @@ function TabGlyph({ kind, focused }: { kind: keyof typeof SERIF_GLYPHS; focused:
   );
 }
 
-function CaptureTabButton() {
-  const router = useRouter();
-  const setShowCapture = useUiStore((s) => s.setShowCapture);
+function CaptureGlyph() {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Capture"
-      onPress={() => {
-        setShowCapture(true);
-        router.push('/capture');
-      }}
-      className="flex-1 items-center justify-center pt-1"
-    >
+    <View className="items-center justify-center pt-1">
       <View className="w-9 h-9 rounded-full bg-heard-rust items-center justify-center">
         <Text className="font-serif-italic text-base text-white">◉</Text>
       </View>
       <Text className="font-mono-medium text-m-label uppercase tracking-wide-1 mt-0.5 text-heard-rust">
         Capture
       </Text>
-    </Pressable>
+    </View>
   );
 }

@@ -1,9 +1,8 @@
-// Phantom route. The capture flow runs as a modal (./capture.tsx at
-// root); this file exists only so the (tabs) tab strip has a slot for
-// the rust-circle Capture button. The button itself in (tabs)/_layout
-// pushes the modal route — this file is never actually rendered.
+// Capture-tab redirector. When the user taps the Capture tab, this
+// route mounts and immediately redirects to the /capture modal at the
+// root stack. Faster + simpler than intercepting tabBarButton.
 
 import { Redirect } from 'expo-router';
-export default function CaptureTabPhantom() {
-  return <Redirect href="/" />;
+export default function CaptureTabRedirect() {
+  return <Redirect href="/capture" />;
 }
