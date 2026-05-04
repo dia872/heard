@@ -20,6 +20,8 @@ import { useEffect, useState } from 'react';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createQueryClient } from '../src/state/queryClient';
 import { createPersister } from '../src/state/persister';
+import { AuthProvider } from '../src/state/AuthContext';
+import Toast from 'react-native-toast-message';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -52,11 +54,12 @@ export default function RootLayout() {
       client={queryClient}
       persistOptions={{ persister }}
     >
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{ headerShown: false }}
-        >
+      <AuthProvider>
+        <SafeAreaProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{ headerShown: false }}
+          >
           {/* Tab navigator */}
           <Stack.Screen name="(tabs)" />
 
@@ -66,10 +69,12 @@ export default function RootLayout() {
           <Stack.Screen name="streamer/[id]" />
 
           {/* Modals — slide up from the bottom */}
-          <Stack.Screen name="capture" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="signup-explore" options={{ presentation: 'modal' }} />
-        </Stack>
-      </SafeAreaProvider>
+            <Stack.Screen name="capture" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="signup-explore" options={{ presentation: 'modal' }} />
+          </Stack>
+          <Toast />
+        </SafeAreaProvider>
+      </AuthProvider>
     </PersistQueryClientProvider>
   );
 }

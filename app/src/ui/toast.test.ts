@@ -1,43 +1,44 @@
-jest.mock('burnt', () => ({
-  toast: jest.fn(),
+jest.mock('react-native-toast-message', () => ({
+  __esModule: true,
+  default: { show: jest.fn() },
 }));
 
-import * as Burnt from 'burnt';
+import Toast from 'react-native-toast-message';
 import { toast } from './toast';
 
 describe('toast', () => {
   beforeEach(() => {
-    (Burnt.toast as jest.Mock).mockClear();
+    (Toast.show as jest.Mock).mockClear();
   });
 
-  it('error() forwards to burnt with the error preset', () => {
+  it('error() forwards to Toast.show with type=error', () => {
     toast.error('boom', { message: 'extra detail' });
-    expect(Burnt.toast).toHaveBeenCalledWith({
-      title: 'boom',
-      message: 'extra detail',
-      preset: 'error',
-      duration: 3,
+    expect(Toast.show).toHaveBeenCalledWith({
+      type: 'error',
+      text1: 'boom',
+      text2: 'extra detail',
+      visibilityTime: 3000,
     });
   });
 
-  it('success() uses the done preset', () => {
+  it('success() uses success type', () => {
     toast.success('saved');
-    expect(Burnt.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ preset: 'done', title: 'saved' })
+    expect(Toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success', text1: 'saved' })
     );
   });
 
-  it('info() uses the none preset', () => {
+  it('info() uses info type', () => {
     toast.info('loading');
-    expect(Burnt.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ preset: 'none' })
+    expect(Toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'info' })
     );
   });
 
-  it('passes a custom duration through', () => {
+  it('passes a custom duration', () => {
     toast.error('boom', { duration: 6 });
-    expect(Burnt.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ duration: 6 })
+    expect(Toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ visibilityTime: 6000 })
     );
   });
 });

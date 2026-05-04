@@ -1,8 +1,8 @@
-// Toast helper — single import surface for the app's user-facing
-// notifications. Wraps `burnt` so we can swap libs without touching
-// callers.
+// Toast helper — pure-JS implementation via react-native-toast-message
+// so it works in Expo Go without a native rebuild. The provider that
+// renders the toasts (<Toast />) lives at the root of the app.
 
-import * as Burnt from 'burnt';
+import Toast from 'react-native-toast-message';
 
 export type ToastSeverity = 'success' | 'error' | 'info';
 
@@ -11,23 +11,17 @@ export interface ToastOptions {
   duration?: number;
 }
 
-function toastWith(severity: ToastSeverity, title: string, opts: ToastOptions = {}) {
-  Burnt.toast({
-    title,
-    message: opts.message,
-    preset: severity === 'success' ? 'done' : severity === 'error' ? 'error' : 'none',
-    duration: opts.duration ?? 3,
+function show(severity: ToastSeverity, title: string, opts: ToastOptions = {}) {
+  Toast.show({
+    type: severity,
+    text1: title,
+    text2: opts.message,
+    visibilityTime: (opts.duration ?? 3) * 1000,
   });
 }
 
 export const toast = {
-  success(title: string, opts?: ToastOptions) {
-    toastWith('success', title, opts);
-  },
-  error(title: string, opts?: ToastOptions) {
-    toastWith('error', title, opts);
-  },
-  info(title: string, opts?: ToastOptions) {
-    toastWith('info', title, opts);
-  },
+  success(title: string, opts?: ToastOptions) { show('success', title, opts); },
+  error(title: string, opts?: ToastOptions)   { show('error', title, opts); },
+  info(title: string, opts?: ToastOptions)    { show('info', title, opts); },
 };
