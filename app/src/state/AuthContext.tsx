@@ -2,10 +2,10 @@
 // current session/userId via useAuth() and the right repo bundle
 // via useRepos(). Soft-gate sign-in flow lands here in Phase 8.
 //
-// For Phase 5 we ship guest-only — the buildRepos factory returns
-// AsyncStorage repos when userId is null. When Phase 8 adds Apple/
-// Google sign-in, we'll subscribe to supabase.auth.onAuthStateChange
-// and update the userId here; everything downstream stays the same.
+// For Phase 5 we ship guest-only — buildRepos returns AsyncStorage
+// repos when userId is null. When Phase 8 adds Apple/Google sign-in,
+// we'll subscribe to supabase.auth.onAuthStateChange and update
+// userId here; everything downstream stays the same.
 
 import { createContext, useContext, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,27 +13,39 @@ import { buildRepos, ReposBundle } from '../domain/repoFactory';
 import { getSupabase } from '../infra/supabase/client';
 
 interface AuthState {
-  /** Authenticated user id, or null when guest. */
   userId: string | null;
 }
 
-const Ctx = createContext<{ state: AuthState; repos: ReposBundle } | null>(null);
+interface CtxValue {
+  state: AuthState;
+  repos: ReposBundle;
+}
+
+const Ctx = createContext<CtxValue | null>(null);
+
+// Stable initial state — keeps useMemo deps shallow-equal across renders.
+const INITIAL_STATE: AuthState = { userId: null };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Phase 5: guest-only. Phase 8 will populate from supabase auth state.
-  const state: AuthState = { userId: null };
+  // Phase 5: guest-only. Phase 8 will swap this for state from
+  // supabase.auth.onAuthStateChange.
+  const state = INITIAL_STATE;
 
-  const repos = useMemo(() => {
-    return buildRepos({
-      // Defer reading supabase until something actually needs it; in
-      // guest mode buildRepos doesn't call .from(), so this is fine.
-      supabase: state.userId ? getSupabase() : null,
-      userId: state.userId,
-      guestStorage: AsyncStorage,
-    });
-  }, [state.userId]);
+  const repos = useMemo(
+    () =>
+      buildRepos({
+        supabase: state.userId ? getSupabase() : null,
+        userId: state.userId,
+        guestStorage: AsyncStorage,
+      }),
+    [state.userId]
+  );
 
-  return <Ctx.Provider value={{ state, repos }}>{children}</Ctx.Provider>;
+  // Memoize the value object too so consumer re-renders only fire
+  // when state or repos identity actually changes.
+  const value = useMemo<CtxValue>(() => ({ state, repos }), [state, repos]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useAuth(): AuthState {

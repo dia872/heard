@@ -1,25 +1,19 @@
 // Trends — three sub-tabs:
 //   1. Most talked about → global trending list
 //   2. By service       → list of streamer cards (drill-in to streamer screen)
-//   3. On my services   → trending filtered to user's owned streamers
-//
-// Most-talked-about + On-my-services use TMDB trending. By-service is
-// purely local (the 7 streamers + a few featured titles for each).
+//   3. On my services   → owned-services filtered (wired in Phase 8 with auth)
 
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ScrollView, Text, View, Pressable, RefreshControl } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Eyebrow } from '../../src/ui/Eyebrow';
 import { SegmentedControl } from '../../src/ui/SegmentedControl';
-import { TitleCard, TitleCardSize } from '../../src/ui/TitleCard';
-import { Skeleton, TitleCardSkeleton } from '../../src/ui/Skeleton';
+import { TitleCard } from '../../src/ui/TitleCard';
+import { Skeleton } from '../../src/ui/Skeleton';
 import { StreamerLogo } from '../../src/ui/StreamerLogo';
-import { Pill } from '../../src/ui/Pill';
 import { useTrending } from '../../src/hooks/useTmdb';
-import { useRepos } from '../../src/state/AuthContext';
-import { useEffect, useState as useReactState } from 'react';
-import type { OwnedService, StreamerId } from '../../src/types';
+import type { TmdbTitle, StreamerId } from '../../src/types';
 import { STREAMERS } from '../../src/data/streamers';
 
 type Tab = 'buzz' | 'services' | 'mine';
@@ -35,11 +29,12 @@ export default function Trends() {
   const trending = useTrending('week');
   const router = useRouter();
 
-  const ownedIds = useOwnedIds();
-  const filteredForOwned = trending.data?.slice(0, 12) ?? [];
-  // True streamer-id filtering needs watch-providers per title; for v0.5
-  // we approximate with TMDB's free metadata and let detail-screen
-  // calls resolve actual availability.
+  const handlePressItem = (item: TmdbTitle) => {
+    router.push({
+      pathname: '/title/[id]',
+      params: { id: String(item.id), mt: item.mediaType },
+    });
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-heard-bg" edges={['top']}>
@@ -52,7 +47,6 @@ export default function Trends() {
           />
         }
       >
-        {/* Header */}
         <View className="px-5.5 pt-3 pb-3.5">
           <Text className="font-serif-italic text-h-large text-heard-ink tracking-tight-2 mb-3">
             What's buzzing
@@ -65,52 +59,39 @@ export default function Trends() {
             isLoading={trending.isLoading}
             error={trending.error}
             items={trending.data ?? []}
-            onPressItem={(item) =>
-              router.push({ pathname: '/title/[id]', params: { id: String(item.id), mt: item.mediaType } })
-            }
+            onPressItem={handlePressItem}
           />
         )}
 
         {tab === 'services' && (
           <ByServiceList
-            ownedIds={ownedIds}
-            onPressService={(id) => router.push({ pathname: '/streamer/[id]', params: { id } })}
+            onPressService={(id) =>
+              router.push({ pathname: '/streamer/[id]', params: { id } })
+            }
           />
         )}
 
         {tab === 'mine' && (
-          <BuzzList
-            isLoading={trending.isLoading}
-            error={trending.error}
-            items={
-              ownedIds.length === 0
-                ? []
-                : filteredForOwned // Phase 6 will refine with watch-providers
-            }
-            emptyHint={
-              ownedIds.length === 0
-                ? "You haven't selected any owned services yet."
-                : "Nothing trending on your services right now."
-            }
-            onPressItem={(item) =>
-              router.push({ pathname: '/title/[id]', params: { id: String(item.id), mt: item.mediaType } })
-            }
-          />
+          <View className="px-5.5 pt-3.5 gap-2">
+            <Eyebrow num="◦">Coming in Phase 8</Eyebrow>
+            <Text className="font-serif text-h-body text-heard-muted">
+              Once you sign in and pick your streaming services, this tab will filter the trending list to just what's on the platforms you have.
+            </Text>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function BuzzList({
-  isLoading, error, items, onPressItem, emptyHint,
-}: {
+interface BuzzListProps {
   isLoading: boolean;
   error: unknown;
-  items: ReturnType<typeof useTrending>['data'] extends infer T ? (T extends undefined ? never : NonNullable<T>) : never;
-  onPressItem: (item: NonNullable<ReturnType<typeof useTrending>['data']>[number]) => void;
-  emptyHint?: string;
-}) {
+  items: TmdbTitle[];
+  onPressItem: (item: TmdbTitle) => void;
+}
+
+function BuzzList({ isLoading, error, items, onPressItem }: BuzzListProps) {
   if (isLoading) {
     return (
       <View className="px-5.5 gap-3.5 pt-1.5">
@@ -129,9 +110,13 @@ function BuzzList({
   }
   if (error) {
     return (
-      <View className="px-5.5 pt-3.5">
+      <View className="px-5.5 pt-3.5 gap-2">
         <Text className="font-serif text-h-body text-heard-rust">
-          Couldn't reach TMDB — check your network or API key.
+          Couldn't reach TMDB.
+        </Text>
+        <Text className="font-serif text-h-body text-heard-muted">
+          Make sure EXPO_PUBLIC_TMDB_KEY is set in app/.env.local and that you
+          restarted Expo with `npx expo start --tunnel --clear` after adding it.
         </Text>
       </View>
     );
@@ -140,7 +125,7 @@ function BuzzList({
     return (
       <View className="px-5.5 pt-3.5">
         <Text className="font-serif text-h-body text-heard-muted">
-          {emptyHint ?? 'Nothing trending right now.'}
+          Nothing trending right now.
         </Text>
       </View>
     );
@@ -188,58 +173,33 @@ function BuzzList({
 }
 
 function ByServiceList({
-  ownedIds, onPressService,
+  onPressService,
 }: {
-  ownedIds: StreamerId[];
   onPressService: (id: StreamerId) => void;
 }) {
-  const ownedSet = new Set(ownedIds);
-  const sorted = [
-    ...STREAMERS.filter((s) => ownedSet.has(s.id)),
-    ...STREAMERS.filter((s) => !ownedSet.has(s.id)),
-  ];
-
   return (
     <View className="px-5.5 pt-1.5">
       <Eyebrow num="◦">Browse by service</Eyebrow>
-      {sorted.map((s) => {
-        const isOwned = ownedSet.has(s.id);
-        return (
-          <Pressable
-            key={s.id}
-            onPress={() => onPressService(s.id)}
-            className="flex-row items-center gap-3.5 py-3 border-b border-heard-hair"
-            accessibilityRole="button"
-            accessibilityLabel={`Browse ${s.name}`}
-          >
-            <StreamerLogo streamer={s} size={44} />
-            <View className="flex-1 gap-0.5">
-              <View className="flex-row items-center gap-2">
-                <Text className="font-serif-italic text-h-small text-heard-ink">
-                  {s.name}
-                </Text>
-                {isOwned && <Pill tone="rust">Yours</Pill>}
-              </View>
-              <Text
-                className="font-serif-italic text-m-display text-heard-muted"
-                numberOfLines={2}
-              >
-                Tap to see what's trending on {s.name}.
-              </Text>
-            </View>
-            <Text className="font-serif text-h-large text-heard-faint">→</Text>
-          </Pressable>
-        );
-      })}
+      {STREAMERS.map((s) => (
+        <Pressable
+          key={s.id}
+          onPress={() => onPressService(s.id)}
+          className="flex-row items-center gap-3.5 py-3 border-b border-heard-hair"
+          accessibilityRole="button"
+          accessibilityLabel={`Browse ${s.name}`}
+        >
+          <StreamerLogo streamer={s} size={44} />
+          <View className="flex-1 gap-0.5">
+            <Text className="font-serif-italic text-h-small text-heard-ink">
+              {s.name}
+            </Text>
+            <Text className="font-serif-italic text-m-display text-heard-muted" numberOfLines={1}>
+              Tap to see what's trending on {s.name}.
+            </Text>
+          </View>
+          <Text className="font-serif text-h-large text-heard-faint">→</Text>
+        </Pressable>
+      ))}
     </View>
   );
-}
-
-function useOwnedIds(): StreamerId[] {
-  const repos = useRepos();
-  const [owned, setOwned] = useReactState<OwnedService[]>([]);
-  useEffect(() => {
-    repos.owned.list().then(setOwned).catch(() => setOwned([]));
-  }, [repos]);
-  return owned.map((o) => o.serviceId);
 }
