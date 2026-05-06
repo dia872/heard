@@ -88,17 +88,28 @@ describe('AsyncSavedRepo', () => {
   it('toggle adds then removes', async () => {
     const store = new MemoryStore();
     const repo = new AsyncSavedRepo(store);
-    const t = { tmdbId: 107, title: 'Severance', year: '2022', posterPath: '/p.jpg' };
+    const t = { tmdbId: 107, title: 'Severance', year: '2022', mediaType: 'tv' as const, posterPath: '/p.jpg' };
     expect(await repo.toggle(t)).toBe('saved');
     expect(await repo.has(107)).toBe(true);
     expect(await repo.toggle(t)).toBe('unsaved');
     expect(await repo.has(107)).toBe(false);
   });
 
+  it('persists media type so saved TV titles reopen on the TV endpoint', async () => {
+    const store = new MemoryStore();
+    const repo = new AsyncSavedRepo(store);
+    await repo.add({ tmdbId: 107, title: 'Severance', year: '2022', mediaType: 'tv', posterPath: '/p.jpg' });
+
+    expect((await repo.list())[0]).toMatchObject({
+      tmdbId: 107,
+      mediaType: 'tv',
+    });
+  });
+
   it('add is idempotent — re-adding the same tmdbId is a no-op', async () => {
     const store = new MemoryStore();
     const repo = new AsyncSavedRepo(store);
-    const t = { tmdbId: 107, title: 'Severance', year: '2022', posterPath: '/p.jpg' };
+    const t = { tmdbId: 107, title: 'Severance', year: '2022', mediaType: 'tv' as const, posterPath: '/p.jpg' };
     await repo.add(t);
     await repo.add(t);
     expect((await repo.list()).length).toBe(1);
@@ -107,8 +118,8 @@ describe('AsyncSavedRepo', () => {
   it('list returns newest-first', async () => {
     const store = new MemoryStore();
     const repo = new AsyncSavedRepo(store);
-    await repo.add({ tmdbId: 1, title: 'A', year: '2020', posterPath: null });
-    await repo.add({ tmdbId: 2, title: 'B', year: '2021', posterPath: null });
+    await repo.add({ tmdbId: 1, title: 'A', year: '2020', mediaType: 'movie', posterPath: null });
+    await repo.add({ tmdbId: 2, title: 'B', year: '2021', mediaType: 'movie', posterPath: null });
     const list = await repo.list();
     expect(list[0].tmdbId).toBe(2);
     expect(list[1].tmdbId).toBe(1);

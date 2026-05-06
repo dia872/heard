@@ -24,5 +24,11 @@ Tracked here for visibility. Ordered by phase blocker urgency.
 **Symptom:** Every `npm install` requires `--legacy-peer-deps` because `react-dom@19.2.5` is pulled in transitively but conflicts with `react@19.1.0`. Doesn't affect runtime.
 **Workaround:** Always pass `--legacy-peer-deps`. Captured in `.agent/REFERENCE.md`.
 
+### Expo dependency validation warnings
+**Discovered:** Phase 6 server start (2026-05-06)
+**Blocks:** Nothing confirmed; Expo dev server starts on port 8083.
+**Symptom:** `npx expo start` warns that several installed package versions differ from Expo's expected compatibility set: `expo-linear-gradient`, `react-native-reanimated`, `@types/jest`, `babel-preset-expo`, `jest`, `jest-expo`, and `react-native-worklets`.
+**Workaround:** Do not change during Phase 6. If runtime issues appear on device, run `npx expo install <runtime package>` and align Jest packages in a focused dependency-maintenance pass, using `--legacy-peer-deps` per `.agent/REFERENCE.md`.
+
 ## Resolved
 (none yet)

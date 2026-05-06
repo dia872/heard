@@ -116,16 +116,17 @@ describe('SupabaseInboxRepo', () => {
 
 describe('SupabaseSavedRepo', () => {
   it('add upserts on (user_id, tmdb_id) for idempotency', async () => {
-    const row = { id: 's1', tmdb_id: 107, title: 'Severance', year: '2022', poster_path: '/p.jpg', added_at: '2026-04-29T00:00:00Z' };
+    const row = { id: 's1', tmdb_id: 107, title: 'Severance', year: '2022', media_type: 'tv', poster_path: '/p.jpg', added_at: '2026-04-29T00:00:00Z' };
     const { client, log } = mockSupabase({ saved: { data: [row], error: null } });
     const repo = new SupabaseSavedRepo(client, 'user-1');
-    await repo.add({ tmdbId: 107, title: 'Severance', year: '2022', posterPath: '/p.jpg' });
+    const saved = await repo.add({ tmdbId: 107, title: 'Severance', year: '2022', mediaType: 'tv', posterPath: '/p.jpg' });
     const rec = log.find((r) => r.table === 'saved')!;
     expect(rec.upserts?.[0].rows).toEqual({
       user_id: 'user-1', tmdb_id: 107, title: 'Severance',
-      year: '2022', poster_path: '/p.jpg',
+      year: '2022', media_type: 'tv', poster_path: '/p.jpg',
     });
     expect(rec.upserts?.[0].opts.onConflict).toBe('user_id,tmdb_id');
+    expect(saved.mediaType).toBe('tv');
   });
 
   it('toggle round-trips: not saved → saved → unsaved', async () => {
@@ -143,15 +144,15 @@ describe('SupabaseSavedRepo', () => {
       chain.order = () => chain;
       chain.maybeSingle = async () => ({ data: exists ? { id: 'x' } : null, error: null });
       chain.single = async () => ({
-        data: { id: 's1', tmdb_id: 107, title: 'Severance', year: '2022', poster_path: null, added_at: '2026-04-29T00:00:00Z' },
+        data: { id: 's1', tmdb_id: 107, title: 'Severance', year: '2022', media_type: 'tv', poster_path: null, added_at: '2026-04-29T00:00:00Z' },
         error: null,
       });
       chain.then = (fn: any) => Promise.resolve({ data: [], error: null }).then(fn);
       return chain;
     };
     const repo = new SupabaseSavedRepo(client, 'user-1');
-    expect(await repo.toggle({ tmdbId: 107, title: 'Severance', year: '2022', posterPath: null })).toBe('saved');
-    expect(await repo.toggle({ tmdbId: 107, title: 'Severance', year: '2022', posterPath: null })).toBe('unsaved');
+    expect(await repo.toggle({ tmdbId: 107, title: 'Severance', year: '2022', mediaType: 'tv', posterPath: null })).toBe('saved');
+    expect(await repo.toggle({ tmdbId: 107, title: 'Severance', year: '2022', mediaType: 'tv', posterPath: null })).toBe('unsaved');
   });
 });
 

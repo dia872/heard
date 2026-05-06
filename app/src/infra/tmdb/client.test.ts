@@ -195,6 +195,50 @@ describe('TmdbClient', () => {
     });
   });
 
+  describe('discoverByProvider', () => {
+    it('fetches movie + tv discover rows for a streamer and sorts by popularity desc', async () => {
+      const fetchFn = jest.fn(async (url: any) => {
+        const asString = String(url);
+        if (asString.includes('/discover/movie')) {
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: async () => ({
+              results: [
+                { id: 105, media_type: 'movie', title: 'Dune: Part Two', release_date: '2024-03-01',
+                  vote_average: 8.2, popularity: 600, poster_path: '/d.jpg', backdrop_path: '/db.jpg', overview: 'Paul...' },
+              ],
+            }),
+          } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            results: [
+              { id: 107, media_type: 'tv', name: 'Severance', first_air_date: '2022-02-18',
+                vote_average: 8.7, popularity: 900, poster_path: '/s.jpg', backdrop_path: '/sb.jpg', overview: 'Mark...' },
+            ],
+          }),
+        } as Response;
+      }) as unknown as typeof fetch;
+
+      const client = new TmdbClient({ apiKey: 'k', fetch: fetchFn });
+      const titles = await client.discoverByProvider('appletv');
+
+      expect(fetchFn).toHaveBeenCalledTimes(2);
+      const urls = (fetchFn as jest.Mock).mock.calls.map((call) => call[0] as string);
+      expect(urls[0]).toContain('/discover/movie');
+      expect(urls[1]).toContain('/discover/tv');
+      expect(urls[0]).toContain('with_watch_providers=350');
+      expect(urls[0]).toContain('watch_region=US');
+      expect(titles.map((t) => [t.id, t.mediaType])).toEqual([[107, 'tv'], [105, 'movie']]);
+      expect(titles[0].streamerIds).toEqual(['appletv']);
+    });
+  });
+
   describe('personCredits', () => {
     it('returns person info plus credits sorted by popularity desc, dedup by id', async () => {
       const fetch = mockFetch({

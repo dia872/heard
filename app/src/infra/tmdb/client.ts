@@ -49,6 +49,16 @@ const TMDB_PROVIDER_TO_STREAMER: Record<number, StreamerId> = {
   386: 'peacock',
 };
 
+const STREAMER_TO_TMDB_PROVIDERS: Record<StreamerId, string> = {
+  netflix: '8',
+  prime: '9',
+  appletv: '350',
+  max: '384|1899',
+  hulu: '15',
+  disney: '337',
+  peacock: '386',
+};
+
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
 const BACKDROP_BASE = 'https://image.tmdb.org/t/p/original';
@@ -126,6 +136,33 @@ export class TmdbClient {
       providers: regionData ? mapWatchProviders(regionData) : [],
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Per-streamer browse surface. TMDB exposes watch-provider filtering
+   * through discover, split by movie and TV, so we merge both lists.
+   */
+  async discoverByProvider(
+    streamerId: StreamerId,
+    region: string = 'US'
+  ): Promise<TmdbTitle[]> {
+    const providerIds = STREAMER_TO_TMDB_PROVIDERS[streamerId];
+    const params = {
+      watch_region: region,
+      with_watch_providers: providerIds,
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+    };
+    const [movies, tv] = await Promise.all([
+      this.get<{ results: TmdbRawListItem[] }>('/discover/movie', params),
+      this.get<{ results: TmdbRawListItem[] }>('/discover/tv', params),
+    ]);
+    return [
+      ...movies.results.map((it) => toTmdbTitle({ ...it, media_type: 'movie' })),
+      ...tv.results.map((it) => toTmdbTitle({ ...it, media_type: 'tv' })),
+    ]
+      .sort((a, b) => b.popularity - a.popularity)
+      .map((title) => ({ ...title, streamerIds: [streamerId] }));
   }
 
   /**

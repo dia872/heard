@@ -41,6 +41,7 @@ export default function Inbox() {
             tmdbId: entry.tmdbId,
             title: entry.title ?? entry.rawText,
             year: entry.year,
+            mediaType: 'movie', // Phase 7 will persist extraction mediaType on inbox rows.
             posterPath: null, // detail screen will hydrate later
           });
         }

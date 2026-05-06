@@ -84,7 +84,7 @@ Heard/
 
 ## Current build state (snapshot)
 
-**Phases 0–5 complete, ✅ runnable on device.** 92 unit tests passing, `tsc --noEmit` clean. Continuous deployment to `origin/main` after every commit.
+**Phases 0–6 complete, ✅ runnable on device.** 96 unit tests passing, `tsc --noEmit` clean. Continuous deployment to `origin/main` after every commit.
 
 What works on device today (via Expo Go on iPhone):
 - All 5 bottom tabs with brand-glyph icons
@@ -92,10 +92,12 @@ What works on device today (via Expo Go on iPhone):
 - **Inbox** — empty state + entry list shape (no entries until Phase 7 capture wires)
 - **Trends** — 3 sub-tabs; "Most talked about" pulls real TMDB trending data
 - **Saved** — 3-column grid layout + filter tabs; empty until you save something
+- **Title detail** — live TMDB detail with backdrop hero, save toggle, where-to-watch grid + freshness label, cast scroll
+- **Actor detail** — live TMDB person credits sorted by popularity
+- **Streamer detail** — live TMDB discover-by-provider browse with owned/non-owned CTA copy
 - **Capture modal** — slides up from bottom (placeholder content; Phase 7 wires the actual capture)
-- All detail screens (title, actor, streamer) are stubs with working back buttons
 
-Next phase: **Phase 6 — Detail screens.** Title detail with backdrop hero, save toggle, where-to-watch grid (with TMDB freshness label per PRD §11), cast scroll. Actor detail with filmography sorted by popularity. Streamer screen with adaptive owned/non-owned CTA.
+Next phase: **Phase 7 — Capture flows.** UI can be built, but real extraction is blocked until Supabase CLI/migrations/secrets/functions are set up and deployed.
 
 See `docs/plans/2026-05-06-build-status.md` for the full breakdown including blockers.
 

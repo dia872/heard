@@ -122,6 +122,7 @@ export interface SavedTitle {
   tmdbId: number;
   title: string;
   year: string | null;
+  mediaType: MediaType;
   posterPath: string | null;
   addedAt: string;
 }

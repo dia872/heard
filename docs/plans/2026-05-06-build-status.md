@@ -4,7 +4,7 @@
 **Source plan:** `docs/plans/2026-04-29-heard-ios-build.md`
 **Source design doc:** `docs/plans/2026-04-29-heard-ios-build-design.md`
 **Branch:** `main` (pushed to `origin/main` continuously)
-**Test status:** 92 tests passing across 13 files; `npx tsc --noEmit` clean
+**Test status:** 96 tests passing across 14 files; `npx tsc --noEmit` clean
 
 ---
 
@@ -18,7 +18,7 @@
 | 3 | Design system / primitives | ✅ Done | TitleCard, StreamerLogo, Eyebrow, Pill, Sheet, IconButton, BackButton, PrimaryButton, GhostButton, BackdropImage, Skeleton, MoodCard, ConfidenceMeter, SegmentedControl. Component snapshot tests deferred — jest-expo's winter runtime breaks the import scope (logged in BUGS.md). |
 | 4 | Navigation skeleton | ✅ Done | All 5 tabs + 3 detail routes + 2 modal routes wired. Soft-gate auth flow stubbed for Phase 8. |
 | 5 | Tab screens | ✅ Done | Front (masthead + 2×2 mood grid), Inbox (entry list + Save/Dismiss/Archive actions), Trends (3 sub-tabs, real TMDB trending wired), Saved (3-column grid + filter tabs). |
-| 6 | Detail screens | 🔜 Next | Title detail (backdrop hero, save toggle, where-to-watch grid with TMDB freshness label, cast scroll), Actor detail (filmography sorted by popularity), Streamer screen (owned/non-owned variant CTAs). |
+| 6 | Detail screens | ✅ Done | Title detail has live TMDB backdrop/poster/metadata, repo-backed save toggle, where-to-watch provider groups with freshness label, and cast navigation. Actor detail loads TMDB person credits sorted by popularity. Streamer detail uses TMDB discover-by-provider and adaptive owned/non-owned CTA copy. |
 | 7 | Capture flows | ⏸ Blocked on `/extract` deployed | Voice (SFSpeech), Paste, URL paste (TikTok/YouTube/Reddit/OG), Screenshot OCR. UI can be built without backend; real extraction requires Edge Function deploy + Anthropic key. |
 | 8 | Onboarding + auth + migration | ⏸ Blocked on Apple Dev | Welcome → service selection → guest enter → soft-gate sign-in → Apple/Google flows → migrate local AsyncStorage → Postgres. |
 | 9 | SignupExplore + adaptive CTAs | 🔜 | Modal with owned/non-owned variant copy, primary/secondary actions, commission disclosure footer. |
@@ -34,9 +34,13 @@ Open `app/` and run `npx expo start --tunnel`, scan QR with Expo Go on iPhone. T
 
 - All 5 bottom tabs navigate
 - Trends tab pulls real TMDB trending data (requires `EXPO_PUBLIC_TMDB_KEY` in `.env.local`)
+- Title, actor, and streamer detail screens load live TMDB data
+- Title detail Save/Unsave persists through the repo layer; saved rows preserve media type
+- Title detail shows TMDB watch providers with an "Updated ..." freshness label
+- Streamer pages browse titles from TMDB discover-by-provider
 - Pull-to-refresh works on Trends, Inbox, Saved
 - Capture modal slides up from bottom
-- Back buttons work on detail-screen stubs
+- Back buttons work on detail screens
 - Brand fonts (Fraunces, Inter, JetBrains Mono) load via expo-font
 - Toast notifications fire on save/dismiss/archive (pure-JS via react-native-toast-message — Expo Go compatible)
 
@@ -46,25 +50,24 @@ Open `app/` and run `npx expo start --tunnel`, scan QR with Expo Go on iPhone. T
 
 In rough priority order:
 
-### Soon (unblocks Phase 6+ progression)
+### Soon (unblocks real Phase 7 capture)
 
-1. **Apply for TMDB Developer API key.** Personal/non-commercial; auto-approved. Paste into `app/.env.local` as `EXPO_PUBLIC_TMDB_KEY=...`. Restart Expo with `--clear`.
-2. **Install Supabase CLI:** `brew install supabase/tap/supabase`
-3. **Apply Supabase migrations:** `supabase link --project-ref fsjssllhrxcfddoibgev` then `supabase db push` (or paste each `supabase/migrations/*.sql` into the dashboard SQL Editor).
-4. **Set Edge Function secrets:** in Supabase dashboard → Edge Functions → Manage secrets:
+1. **Install Supabase CLI:** `brew install supabase/tap/supabase`
+2. **Apply Supabase migrations:** `supabase link --project-ref fsjssllhrxcfddoibgev` then `supabase db push` (or paste each `supabase/migrations/*.sql` into the dashboard SQL Editor). Includes `0005_saved_media_type.sql`.
+3. **Set Edge Function secrets:** in Supabase dashboard → Edge Functions → Manage secrets:
    - `ANTHROPIC_API_KEY` from https://console.anthropic.com
    - `TMDB_KEY` (same value as the `.env.local` one)
-5. **Deploy Edge Functions:** `supabase functions deploy extract resolve-url`
+4. **Deploy Edge Functions:** `supabase functions deploy extract resolve-url`
 
 ### Later (Phase 8+ unblockers)
 
-6. **Apple Developer account enrollment** ($99/yr) — blocks Sign in with Apple, Google secondary, and TestFlight.
-7. **Google OAuth client ID** — only needed if/when we add Sign in with Google for v1.0.
+5. **Apple Developer account enrollment** ($99/yr) — blocks Sign in with Apple, Google secondary, and TestFlight.
+6. **Google OAuth client ID** — only needed if/when we add Sign in with Google for v1.0.
 
 ### Pre-v1.0 (commercial launch)
 
-8. **TMDB commercial agreement** ($149/mo) — Task #29. ~2 weeks before public launch.
-9. **TMDB §3 attribution string** in About surface — Task #28. Compliance even on the Developer key; rides along with Phase 10 polish.
+7. **TMDB commercial agreement** ($149/mo) — Task #29. ~2 weeks before public launch.
+8. **TMDB §3 attribution string** in About surface — Task #28. Compliance even on the Developer key; rides along with Phase 10 polish.
 
 ---
 
@@ -108,4 +111,4 @@ If a fresh Claude session picks this up:
 
 1. Read this file + `docs/plans/2026-04-29-heard-ios-build.md` (the canonical plan) + `docs/plans/2026-04-29-heard-ios-build-design.md` (the brainstorm decisions) + `BUGS.md` + `.agent/REFERENCE.md`.
 2. Check the user's pending action items above — confirm which are still pending.
-3. Resume at Phase 6 (Detail screens) if all Phase 0–5 user-action items are met. Otherwise pick a phase that doesn't depend on what's still pending.
+3. Resume at Phase 7 (Capture flows). Build UI locally if backend setup is still pending; real extraction waits for the Supabase/Edge Function action items above.

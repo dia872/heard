@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   InboxEntry,
+  MediaType,
   SavedTitle,
   OwnedService,
   StreamerId,
@@ -41,6 +42,7 @@ interface SavedRow {
   tmdb_id: number;
   title: string;
   year: string | null;
+  media_type?: MediaType | null;
   poster_path: string | null;
   added_at: string;
 }
@@ -70,6 +72,7 @@ const savedFromRow = (r: SavedRow): SavedTitle => ({
   tmdbId: r.tmdb_id,
   title: r.title,
   year: r.year,
+  mediaType: r.media_type ?? 'movie',
   posterPath: r.poster_path,
   addedAt: r.added_at,
 });
@@ -164,6 +167,7 @@ export class SupabaseSavedRepo implements SavedRepo {
           tmdb_id: t.tmdbId,
           title: t.title,
           year: t.year,
+          media_type: t.mediaType,
           poster_path: t.posterPath,
         },
         { onConflict: 'user_id,tmdb_id', ignoreDuplicates: false }

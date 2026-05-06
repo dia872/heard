@@ -121,7 +121,12 @@ export class AsyncSavedRepo implements SavedRepo {
   constructor(private readonly store: KeyValueStore, private readonly now = () => Date.now()) {}
 
   async list(): Promise<SavedTitle[]> {
-    return readArray<SavedTitle>(this.store, KEYS.saved);
+    const items = await readArray<SavedTitle & { mediaType?: SavedTitle['mediaType'] }>(this.store, KEYS.saved);
+    return items.map((item) => ({
+      ...item,
+      // v0.5 alpha had saved rows before mediaType was persisted.
+      mediaType: item.mediaType ?? 'movie',
+    }));
   }
 
   async add(t: Omit<SavedTitle, 'id' | 'addedAt'>): Promise<SavedTitle> {
@@ -134,6 +139,7 @@ export class AsyncSavedRepo implements SavedRepo {
       tmdbId: t.tmdbId,
       title: t.title,
       year: t.year,
+      mediaType: t.mediaType,
       posterPath: t.posterPath,
       addedAt: new Date(this.now()).toISOString(),
     };

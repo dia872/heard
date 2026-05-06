@@ -5,7 +5,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getTmdbClient } from '../infra/tmdb';
 import { TTL } from '../state/queryClient';
-import type { MediaType } from '../types';
+import type { MediaType, StreamerId } from '../types';
 
 export function useTrending(window: 'day' | 'week' = 'week') {
   return useQuery({
@@ -48,5 +48,14 @@ export function usePersonCredits(id: number | undefined) {
     queryFn: () => getTmdbClient().personCredits(id!),
     staleTime: TTL.detail,
     enabled: id != null,
+  });
+}
+
+export function useStreamerTitles(streamerId: StreamerId | undefined) {
+  return useQuery({
+    queryKey: ['tmdb', 'streamer', streamerId],
+    queryFn: () => getTmdbClient().discoverByProvider(streamerId!),
+    staleTime: TTL.trending,
+    enabled: streamerId != null,
   });
 }

@@ -361,9 +361,9 @@ Each phase below has the deliverable, success criteria, and known task shape. Bi
 **Deliverable:** Title, Actor, Streamer screens. Title shows watch providers grid with freshness label.
 
 **Success criteria:**
-- [ ] Title detail save toggle persists via repo
-- [ ] Actor detail filmography sorted by popularity
-- [ ] Streamer screen shows owned vs non-owned variant copy
+- [x] Title detail save toggle persists via repo
+- [x] Actor detail filmography sorted by popularity
+- [x] Streamer screen shows owned vs non-owned variant copy
 
 ### Phase 7 — Capture flows (~16 tasks)
 

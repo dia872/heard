@@ -1,10 +1,9 @@
 // Saved — your watchlist. 3-column grid with three filter tabs:
 //   All / On your services / Elsewhere
 //
-// Filter logic depends on per-title streamerIds, which we don't have
-// at save-time (saved entries only carry tmdb_id + title basics). For
-// v0.5 alpha the filter renders a placeholder when applied — Phase 6
-// adds the watch-providers hydration on save so this filter works.
+// Filter logic depends on per-title streamerIds, which are hydrated in
+// Phase 10. Saved rows now preserve mediaType so reopening details hits
+// the right TMDB endpoint.
 
 import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
@@ -105,7 +104,7 @@ export default function Saved() {
                 item={s}
                 width={colWidth}
                 onPress={() =>
-                  router.push({ pathname: '/title/[id]', params: { id: String(s.tmdbId), mt: 'movie' } })
+                  router.push({ pathname: '/title/[id]', params: { id: String(s.tmdbId), mt: s.mediaType } })
                 }
               />
             ))}
@@ -129,7 +128,7 @@ function SavedCard({
         id: item.tmdbId,
         title: item.title,
         year: item.year,
-        mediaType: 'movie', // TODO Phase 6: persist mediaType on save
+        mediaType: item.mediaType,
         voteAverage: 0,
         posterPath: item.posterPath,
       }}
